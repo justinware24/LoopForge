@@ -27,7 +27,7 @@ function openGitHTTPCredentials(options = {}) {
       <h2 id="gitHTTPCredentialTitle">Git 访问令牌（按主机）</h2>
       <button type="button" class="credential-btn ghost icon" data-http-cred-close aria-label="关闭">${credentialGlyph('close', 16)}</button>
     </header>
-    <p class="git-ssh-description">每个 HTTPS 主机配置一个个人访问令牌。平台与工作区访问该主机时，使用本轮责任人或发言人的凭据。</p>
+    <p class="git-ssh-description">每个主机配置一个个人访问令牌。平台与工作区访问该主机时，使用本轮责任人或发言人的凭据。</p>
     <p class="git-ssh-status" role="status">正在读取凭据…</p>
     <div class="git-ssh-key-list"></div>
     <button type="button" class="credential-btn primary" data-http-cred-add disabled>添加令牌</button>
@@ -40,6 +40,16 @@ function openGitHTTPCredentials(options = {}) {
         </div>
       </label>
       ${credentialFieldHTML({label:'HTTPS 主机', name:'host', type:'text', placeholder:'github.com 或 gitlab.example.org:8443', hint:'填写域名或 IPv6 地址。IPv6 带端口时写作 [fd00::2]:8443。'})}
+      <label class="credential-field">
+        <span>协议</span>
+        <div class="credential-input is-plain">
+          <select name="scheme" class="git-http-select" aria-label="协议" aria-describedby="gitHTTPCredentialSchemeHint">
+            <option value="https">HTTPS</option>
+            <option value="http">HTTP（自建实例）</option>
+          </select>
+        </div>
+        <small id="gitHTTPCredentialSchemeHint">自建 GitLab 若不以 HTTPS 提供服务，选 HTTP；令牌会以明文经过该主机。公网主机只支持 HTTPS。</small>
+      </label>
       <label class="credential-field">
         <span>平台</span>
         <div class="credential-input is-plain">
@@ -63,7 +73,7 @@ function openGitHTTPCredentials(options = {}) {
   const add = dialog.querySelector('[data-http-cred-add]');
   const form = dialog.querySelector('form');
   const field = key => form.elements.namedItem(key);
-  const [instance, host, platform, name, username, token] = ['instance', 'host', 'platform', 'name', 'username', 'token'].map(field);
+  const [instance, host, scheme, platform, name, username, token] = ['instance', 'host', 'scheme', 'platform', 'name', 'username', 'token'].map(field);
   const instanceField = instance.closest('.credential-field');
   const manualFields = [host, platform, name, username].map(input => input.closest('.credential-field'));
   const submit = form.querySelector('button[type="submit"]');
@@ -81,7 +91,7 @@ function openGitHTTPCredentials(options = {}) {
 
   function credentialSummary(cred) {
     const platformLabel = (GIT_HTTP_PLATFORMS.find(([value]) => value === cred.platform) || [, cred.platform])[1];
-    const tags = [platformLabel, cred.managed ? '平台托管' : ''].filter(Boolean);
+    const tags = [platformLabel, cred.managed ? '平台托管' : '', cred.scheme === 'http' ? 'HTTP' : ''].filter(Boolean);
     return `<div class="git-ssh-key-summary"><b>${escapeHTML(cred.name)}</b><small><code>${escapeHTML(cred.host)}</code> · ${tags.map(escapeHTML).join(' · ')}</small></div>`;
   }
 
@@ -117,6 +127,7 @@ function openGitHTTPCredentials(options = {}) {
     host.value = cred?.host || '';
     host.readOnly = !!cred;
     platform.value = cred?.platform || options.platform || 'github';
+    scheme.value = cred?.scheme || 'https';
     name.value = cred?.name || '';
     name.placeholder = '例如 公司 GitLab';
     username.value = cred?.username || '';
@@ -218,7 +229,8 @@ function openGitHTTPCredentials(options = {}) {
     const body = selected ? {
       host:selected.host, platform:selected.platform, name:selected.host.slice(0, 80), token:token.value,
     } : {
-      host:host.value, platform:platform.value, name:name.value.trim() || globalThis.LoopForgeGitHTTPSHost(host.value),
+      host:host.value, scheme:scheme.value, platform:platform.value,
+      name:name.value.trim() || globalThis.LoopForgeGitHTTPSHost(host.value),
       username:username.value.trim() || (editing ? '' : gitHTTPDefaultUsername(platform.value)),
       token:token.value,
     };

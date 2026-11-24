@@ -59,7 +59,7 @@ test('Git HTTPS credentials are managed per host with write-only tokens and veri
   const saves = () => app.router.calls.filter(call => call.method === 'PUT' && call.path === endpoint);
   assert.equal(app.evaluate('credentialUser().gitHubCredentialConfigured'), true, 'saving the host list refreshes the GitHub authorization row');
   assert.deepEqual(saves()[0].body, {
-    host: 'https://gitlab.corp.example/', platform: 'gitlab', name: 'gitlab.corp.example',
+    host: 'https://gitlab.corp.example/', scheme: 'https', platform: 'gitlab', name: 'gitlab.corp.example',
     username: 'oauth2', token: 'glpat-test-only',
   });
   assert.equal(form.hidden, true);
@@ -74,7 +74,7 @@ test('Git HTTPS credentials are managed per host with write-only tokens and veri
   form.dispatchEvent(new app.window.Event('submit', { bubbles: true, cancelable: true }));
   await settle(6);
   assert.deepEqual(saves()[1].body, {
-    id: 'gh', host: 'github.com', platform: 'github', name: 'GitHub personal',
+    id: 'gh', host: 'github.com', scheme: 'https', platform: 'github', name: 'GitHub personal',
     username: 'x-access-token', token: '',
   });
 

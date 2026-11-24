@@ -57,12 +57,16 @@ func prepareRunGitBinding(ctx context.Context, sandbox Sandbox, command CommandS
 			Params struct{ Protocol, Host string } `json:"params"`
 		}
 		result := gitCredentialReply{}
-		if len(raw) <= 4096 && json.Unmarshal(raw, &request) == nil && request.Method == gitCredentialMethod && request.Params.Protocol == "https" {
-			if host, err := gitwork.HTTPSHostScope(request.Params.Host); err == nil && ctx.Err() == nil {
-				if credential, ok := secrets[host]; ok {
-					result = gitCredentialReply{Username: credential.GitUsername(), Password: credential.Token, Platform: credential.Platform}
-					if !credential.ExpiresAt.IsZero() {
-						result.PasswordExpiryUTC = credential.ExpiresAt.Unix()
+		if len(raw) <= 4096 && json.Unmarshal(raw, &request) == nil && request.Method == gitCredentialMethod {
+			// The protocol decides which credential the host has: a token
+			// bound to an https host is not handed out over plain HTTP.
+			if request.Params.Protocol == "https" || request.Params.Protocol == "http" {
+				if host, err := gitwork.HTTPSHostScope(request.Params.Host); err == nil && ctx.Err() == nil {
+					if credential, ok := secrets[host]; ok && credential.GitScheme() == request.Params.Protocol {
+						result = gitCredentialReply{Username: credential.GitUsername(), Password: credential.Token, Platform: credential.Platform}
+						if !credential.ExpiresAt.IsZero() {
+							result.PasswordExpiryUTC = credential.ExpiresAt.Unix()
+						}
 					}
 				}
 			}

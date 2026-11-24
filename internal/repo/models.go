@@ -71,6 +71,7 @@ type gitHTTPCredentialRow struct {
 	Name     string     `gorm:"size:80;not null"`
 	Platform string     `gorm:"size:16;not null"`
 	Host     string     `gorm:"size:255;not null"`
+	Scheme   string     `gorm:"size:8;not null;default:'https'"`
 	Username string     `gorm:"size:128;not null"`
 	Token    string     `gorm:"type:text;not null"`
 	Created  *time.Time `gorm:"column:created_at"`

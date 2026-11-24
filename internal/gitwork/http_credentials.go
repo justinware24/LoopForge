@@ -12,6 +12,10 @@ import (
 type HTTPCredential struct {
 	Username string
 	Token    string
+	// Scheme is the transport the credential was registered for: "https" or
+	// "http". The credential helper answers only for that scheme, so a token
+	// bound to an https host is never handed out over plain HTTP.
+	Scheme string
 }
 
 type httpCredentialsKey struct{}
@@ -42,17 +46,27 @@ func httpCredentialForCommand(ctx context.Context, args []string) (credential HT
 		}
 	}
 	u, err := url.Parse(remote)
-	if err != nil || u.Scheme != "https" {
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
 		return HTTPCredential{}, "", ""
 	}
-	host, err = HTTPSHostScope("https://" + u.Host)
+	host, _, err = GitHostScope(u.Scheme + "://" + u.Host)
 	if err != nil {
 		return HTTPCredential{}, "", ""
 	}
 	credential = credentials[host]
+	// The credential answers only for the transport it was registered for.
+	// A token bound to an https host is never handed out over plain HTTP.
+	scheme := credential.Scheme
+	if scheme == "" {
+		scheme = "https"
+	}
+	if scheme != u.Scheme {
+		return HTTPCredential{}, "", ""
+	}
 	if credential.Username == "" {
 		credential.Username = "x-access-token"
 	}
+	credential.Scheme = scheme
 	// Git can pass either the URL's original spelling or the normalized IPv6
 	// authority from its HTTP transport to the credential helper.
 	return credential, host, strings.TrimSuffix(strings.ToLower(u.Host), ":443")
@@ -63,8 +77,19 @@ const (
 	gitHTTPURLHostEnv = "AGENTFLOW_GIT_HTTP_URL_HOST"
 )
 
+// gitHTTPSchemeEnv names the scheme the bound credential was written with.
+// The helper answers only for that scheme, so a credential bound to an https
+// host is never handed out over plain HTTP, and the other way round.
+const gitHTTPSchemeEnv = "AGENTFLOW_GIT_HTTP_SCHEME"
+
 // scopedCredentialHelper accepts Git's protocol, rather than returning a
 // password to every host a redirect, submodule or checkout might request.
+//
+// The helper serves the credential for the host the platform named, and only
+// over the scheme the credential was written with. A credential bound to an
+// http host therefore hands the token to that host over plain HTTP; the
+// platform only offers this for a self-hosted instance the user registered on
+// purpose.
 func scopedCredentialHelper() string {
 	return `!f() {
 		test "$1" = get || exit 0
@@ -75,7 +100,9 @@ func scopedCredentialHelper() string {
 				host=*) host=${line#host=} ;;
 			esac
 		done
-		test "$protocol" = https || exit 0
+		scheme=$(printf '%s' "$` + gitHTTPSchemeEnv + `" | tr '[:upper:]' '[:lower:]')
+		test -n "$scheme" || scheme=https
+		test "$protocol" = "$scheme" || exit 0
 		host=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')
 		case "${host%:443}" in
 			"$` + gitHTTPHostEnv + `"|"$` + gitHTTPURLHostEnv + `")

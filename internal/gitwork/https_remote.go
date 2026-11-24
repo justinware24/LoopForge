@@ -9,11 +9,16 @@ import (
 
 // HTTPSRepositoryURL validates a transport URL without identifying the host's
 // product. Credentials are requested separately through the Git helper.
+//
+// A self-hosted GitLab commonly serves its clone URLs over plain HTTP, so an
+// http:// URL is accepted next to an https:// one. The name keeps its
+// original wording because the credential a URL selects is still an HTTPS
+// credential in the platform's sense: a personal token bound to one host.
 func HTTPSRepositoryURL(raw string) (remote, name string, err error) {
 	raw = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), "git clone "))
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(raw, "\\\t\r\n ") {
-		return "", "", fmt.Errorf("请提供不含凭据、查询参数或片段的 HTTPS Git 克隆地址")
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(raw, "\\\t\r\n ") {
+		return "", "", fmt.Errorf("请提供不含凭据、查询参数或片段的 HTTP(S) Git 克隆地址")
 	}
 	host, err := HTTPSHostScope("https://" + u.Host)
 	if err != nil {

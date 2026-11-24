@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"strings"
 	"time"
 )
@@ -98,8 +99,55 @@ type GitHTTPCredential struct {
 	Name     string `json:"name"`
 	Platform string `json:"platform"`
 	Host     string `json:"host"`
+	// Scheme is the scheme the control plane calls the API on: "https" for a
+	// public host, "http" for a self-hosted instance that serves its API
+	// without TLS. An empty value means "https", so a credential created
+	// before this field existed keeps working.
+	Scheme   string `json:"scheme,omitempty"`
 	Username string `json:"username,omitempty"`
 	Managed  bool   `json:"managed,omitempty"`
+}
+
+// GitScheme is the scheme the control plane calls the credential's API on.
+// An empty scheme means "https", because that is what every public host and
+// every credential created before the scheme became configurable used.
+func (c GitHTTPCredential) GitScheme() string {
+	switch strings.ToLower(strings.TrimSpace(c.Scheme)) {
+	case "http":
+		return "http"
+	default:
+		return "https"
+	}
+}
+
+// publicGitHosts are the hosts the platform knows to serve over TLS only.
+// A credential for one of them is never bound to plain HTTP, because the
+// token would travel in the clear to a host the user cannot have meant to
+// reach insecurely.
+var publicGitHosts = map[string]bool{
+	"github.com": true,
+	"gitlab.com": true,
+}
+
+// ErrGitHTTPSchemeNotAllowed reports a credential that asks for plain HTTP on
+// a host that serves TLS only.
+var ErrGitHTTPSchemeNotAllowed = errors.New("该主机只支持 HTTPS，请改用 https 协议")
+
+// ValidateGitScheme reports whether the credential may be bound to the
+// transport it names.
+//
+// Plain HTTP is for a self-hosted instance the user registered on purpose:
+// a GitLab of their own, reachable only inside a network. The public hosts
+// the platform knows serve TLS only, so a credential for one of them stays on
+// https no matter what the form asked for.
+func (c GitHTTPCredential) ValidateGitScheme() error {
+	if c.GitScheme() != "http" {
+		return nil
+	}
+	if publicGitHosts[strings.ToLower(strings.TrimSpace(c.Host))] {
+		return ErrGitHTTPSchemeNotAllowed
+	}
+	return nil
 }
 
 // GitUsername is the Basic-auth user Git sends with the token.
@@ -112,15 +160,20 @@ func (c GitHTTPCredential) GitUsername() string {
 
 // APIBase is the REST API root the control plane uses for the credential's
 // host, or "" for platforms it does not call.
+//
+// A self-hosted GitLab commonly serves its API over plain HTTP on a port of
+// its own, so the scheme follows the credential rather than being fixed to
+// https. The host keeps its "host[:port]" form, which is also the scope Git
+// itself reports to a credential helper.
 func (c GitHTTPCredential) APIBase() string {
 	switch c.Platform {
 	case GitPlatformGitHub:
 		if c.Host == "github.com" {
 			return "https://api.github.com"
 		}
-		return "https://" + c.Host + "/api/v3"
+		return c.GitScheme() + "://" + c.Host + "/api/v3"
 	case GitPlatformGitLab:
-		return "https://" + c.Host + "/api/v4"
+		return c.GitScheme() + "://" + c.Host + "/api/v4"
 	default:
 		return ""
 	}

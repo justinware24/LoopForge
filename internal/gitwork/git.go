@@ -89,6 +89,7 @@ func command(ctx context.Context, workspace string, sshEnv map[string]string, ar
 		cmd.Env = WithEnvValue(cmd.Env, "GIT_CONFIG_PARAMETERS", "")
 		cmd.Env = WithEnvValue(cmd.Env, gitHTTPHostEnv, host)
 		cmd.Env = WithEnvValue(cmd.Env, gitHTTPURLHostEnv, urlHost)
+		cmd.Env = WithEnvValue(cmd.Env, gitHTTPSchemeEnv, credential.Scheme)
 		cmd.Env = WithEnvValue(cmd.Env, gitHTTPUserEnv, credential.Username)
 		cmd.Env = WithEnvValue(cmd.Env, gitHTTPPassEnv, credential.Token)
 	}

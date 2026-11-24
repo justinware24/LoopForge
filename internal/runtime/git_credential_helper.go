@@ -265,10 +265,10 @@ func cliRepoHost(repo string) string {
 	return ""
 }
 
-// remoteHost is the API host of an HTTPS or SSH remote; gh and glab call the
+// remoteHost is the API host of an HTTP(S) or SSH remote; gh and glab call the
 // HTTPS API whichever protocol Git uses.
 func remoteHost(remote string) string {
-	if host, ok := gitwork.HTTPSRemoteHost(remote); ok {
+	if host, ok := gitwork.GitRemoteHost(remote); ok {
 		return host
 	}
 	if parsed, err := gitwork.ParseSSHRemote(remote); err == nil {

@@ -66,9 +66,18 @@ func TestHTTPSRepositoryURLDoesNotNeedAPlatform(t *testing.T) {
 	if err != nil || remote != "https://unfamiliar.example.org/team/code.git" || name != "code" {
 		t.Fatalf("%q %q %v", remote, name, err)
 	}
-	for _, raw := range []string{"http://unfamiliar.example.org/team/code", "https://user:token@unfamiliar.example.org/team/code", "https://unfamiliar.example.org/", "https://unfamiliar.example.org/team/../code", "https://unfamiliar.example.org/team/code?token=x", "https://127.0.0.1/team/code"} {
+	for _, raw := range []string{"https://user:token@unfamiliar.example.org/team/code", "https://unfamiliar.example.org/", "https://unfamiliar.example.org/team/../code", "https://unfamiliar.example.org/team/code?token=x", "https://127.0.0.1/team/code"} {
 		if _, _, err := HTTPSRepositoryURL(raw); err == nil {
 			t.Fatalf("unsafe URL accepted: %s", raw)
 		}
+	}
+}
+
+// A self-hosted GitLab commonly serves its clone URLs over plain HTTP, so an
+// http URL names a repository the same way an https one does.
+func TestHTTPSRepositoryURLAcceptsAPlainHTTPHost(t *testing.T) {
+	remote, name, err := HTTPSRepositoryURL("http://Git.Example.org:8929/team/code.git")
+	if err != nil || remote != "http://git.example.org:8929/team/code.git" || name != "code" {
+		t.Fatalf("%q %q %v", remote, name, err)
 	}
 }

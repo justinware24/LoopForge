@@ -30,6 +30,9 @@ type gitHTTPCredentialInput struct {
 	Host     string `json:"host"`
 	Name     string `json:"name"`
 	Platform string `json:"platform"`
+	// Scheme is the scheme the control plane calls the API on. An empty
+	// value follows the scheme the host itself was written with.
+	Scheme   string `json:"scheme"`
 	Username string `json:"username"`
 	Token    string `json:"token"`
 }
@@ -95,11 +98,34 @@ func respondGitHTTPCredentialError(c *gin.Context, err error) {
 	}
 }
 
+// gitHTTPCredentialScheme settles the transport a credential is bound to.
+//
+// The scheme the host was written with is the default. An explicit scheme on
+// the form wins over it, because the two describe the same host reached
+// differently.
+func gitHTTPCredentialScheme(hostScheme, declared string) (string, error) {
+	switch value := strings.ToLower(strings.TrimSpace(declared)); value {
+	case "http", "https":
+		return value, nil
+	case "":
+		return hostScheme, nil
+	default:
+		return "", errors.New("协议只能是 http 或 https")
+	}
+}
+
 // gitHTTPCredentialFromInput validates the form. The platform defaults to
 // GitHub for github.com and "other" elsewhere.
 func (h *usersHandlers) gitHTTPCredentialFromInput(ctx context.Context, userID int64, input gitHTTPCredentialInput) (domain.GitHTTPCredentialSecret, error) {
-	host, err := gitwork.HTTPSHostScope(input.Host)
+	host, scheme, err := gitwork.GitHostScope(input.Host)
 	if err != nil {
+		return domain.GitHTTPCredentialSecret{}, err
+	}
+	scheme, err = gitHTTPCredentialScheme(scheme, input.Scheme)
+	if err != nil {
+		return domain.GitHTTPCredentialSecret{}, err
+	}
+	if err := (domain.GitHTTPCredential{Platform: input.Platform, Host: host, Scheme: scheme}).ValidateGitScheme(); err != nil {
 		return domain.GitHTTPCredentialSecret{}, err
 	}
 	name := strings.TrimSpace(input.Name)
@@ -126,7 +152,7 @@ func (h *usersHandlers) gitHTTPCredentialFromInput(ctx context.Context, userID i
 	}
 	return domain.GitHTTPCredentialSecret{
 		GitHTTPCredential: domain.GitHTTPCredential{
-			Name: name, Platform: platform, Host: host, Username: username},
+			Name: name, Platform: platform, Host: host, Scheme: scheme, Username: username},
 		Token: token,
 	}, nil
 }
